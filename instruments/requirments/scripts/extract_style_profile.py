@@ -20,7 +20,7 @@ python scripts/extract_style_profile.py \
   -o style/style_profile.json \
   --org "My Company" \
   --lang ru-RU \
-  -m gpt-4o-mini \
+  -m gpt-4o \
   --recursive \
   --temperature 0.2 \
   --max-examples 6 \
