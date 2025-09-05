@@ -24,6 +24,11 @@ setx OPENAI_API_KEY "ваш_ключ"
 - Положить OpenAPI файлы со спекой проекта (*опционально*)
 - Установить переменную окружения `OPENAI_API_KEY`
 - Установить зависимости из файла requirments.txt
+```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+```
 
 ---
 
@@ -55,7 +60,7 @@ python scripts/extract_style_profile.py \
   -o style/style_profile.json \
   --org "My Company" \
   --lang ru-RU \
-  -m gpt-4o-mini \
+  -m gpt-4o \
   --recursive \
   --temperature 0.2 \
   --max-examples 6 \

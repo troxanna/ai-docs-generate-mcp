@@ -190,9 +190,21 @@ LANGUAGE: {LANG}
     — лейблы/терминологию и правила их написания.
     Если сомневаешься — НЕ включай.
 
-ВЫХОД
-Верни ОДИН валидный JSON-объект со свободной структурой, полностью выведенной из корпуса.
-Никаких комментариев, пояснений или Markdown снаружи. Только JSON.
+
+ВЫХОД (ОБЯЗАТЕЛЬНО)
+Верни ОДИН валидный JSON-объект, полностью выведенный из корпуса. Никаких комментариев, пояснений или Markdown снаружи. Только JSON
+
+Требования к структуре:
+— В корне должен быть объект "structure".
+— Внутри него обязательно должен быть массив "sections" (даже если он пустой).
+— "structure.sections" — это список ОБОБЩЁННЫХ названий разделов, выведенных из прикреплённых артефактов (группируй схожие заголовки под единым каноническим именем).
+— Каждый элемент "structure.sections[]" — объект:
+    {
+      "name": "<каноническое название раздела>",
+      "notes": "<краткое пояснение или критерии включения; опусти ключ, если нечего добавить>"
+    }
+— Не подставляй фиктивные разделы: включай только то, что действительно следует из корпуса. Если разделов не выявлено — верни "sections": [].
+- В остальном структура json должна быть свободной,  полностью выведенной из корпуса
 """
 
 def build_prompt_free(artifacts_text: str, org: str, lang: str) -> str:
@@ -298,6 +310,35 @@ def post_merge_few_shot(profile: dict, examples: list[str]) -> dict:
     return profile
 
 # ----------------------- Helpers --------------------------
+def ensure_sections_presence_only(profile: dict) -> dict:
+    """
+    Гарантирует наличие profile["structure"]["sections"], НЕ добавляя ничего «своего».
+    Если модель не вернула это поле — создаём пустой массив.
+    Если вернула список строк — нормализуем в [{ "name": "<строка>"}].
+    """
+    if not isinstance(profile, dict):
+        profile = {}
+    structure = profile.get("structure")
+    if not isinstance(structure, dict):
+        structure = {}
+    sections = structure.get("sections")
+    if sections is None:
+        structure["sections"] = []
+    elif isinstance(sections, list):
+        normalized = []
+        for item in sections:
+            if isinstance(item, dict) and "name" in item:
+                # name обязателен, остальное — как вернула модель
+                normalized.append({"name": str(item["name"]).strip(), **{k: v for k, v in item.items() if k != "name"}})
+            elif isinstance(item, str):
+                normalized.append({"name": item.strip()})
+        structure["sections"] = normalized
+    else:
+        # если по ошибке пришло не-массив — приводим к пустому массиву
+        structure["sections"] = []
+    profile["structure"] = structure
+    return profile
+
 def _coerce_json(s: str) -> dict:
     try:
         return json.loads(s)
@@ -416,6 +457,9 @@ def main(argv=None):
 
     # 8a) Вставим/объединим few_shot_examples
     data = post_merge_few_shot(data, unique_few_shots)
+
+    # 8b) Обязательное наличие structure.sections (без локального извлечения!)
+    data = ensure_sections_presence_only(data)
 
     # 9) Запись
     Path(args.output).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
