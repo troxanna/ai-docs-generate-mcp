@@ -35,6 +35,8 @@ instruments/requirments/docs/*
 instruments/requirments/style/*
 instruments/requirments/spec/*
 instruments/requirments/source/*
+instruments/requirments/source/hints.json
+instruments/requirments/screens/*
 instruments/venv
 .DS_Store
 

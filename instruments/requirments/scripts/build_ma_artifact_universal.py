@@ -22,6 +22,7 @@ build_ma_artifact_universal.py
     --api-minimal minimal.json \
     --style-profile style/style_profile.json \
     --hints hints.json \
+    --platform native-mobile \
     --out "[MA] Уведомления.md" \
     --model gpt-4o
 """
@@ -109,6 +110,16 @@ def build_section_plan(requirements: Any, style_profile: Dict[str, Any], api_min
         return req
     return default_sections(feature_name)
 
+def _normalize_platform(p: Optional[str]) -> str:
+    p = (p or "").strip().lower()
+    if p in {"native", "native-mobile", "mobile", "ios", "android"}:
+        return "native-mobile"
+    if p in {"cross", "cross-mobile", "flutter", "react-native"}:
+        return "cross-mobile"
+    if p == "web":
+        return "web"
+    return ""
+
 
 # ---------- Few-shot helpers (inject from style_profile) ----------
 def _collect_few_shot_examples_from_profile(style_profile: dict,
@@ -154,19 +165,42 @@ def _few_shot_block(style_profile: dict) -> str:
 
 
 # ---------- Prompts (UNIVERSAL) ----------
-def system_prompt_universal(style_profile: dict) -> str:
+def system_prompt_universal(style_profile: dict, platform: Optional[str]) -> str:
+    platform = _normalize_platform(platform)
     base = """\
 Вы — системный аналитик. Сгенерируйте сценарный Markdown-документ требований в стиле профиля.
 Строго следуйте списку разделов section_plan — порядок/заголовки менять ЗАПРЕЩЕНО.
 
 Общие правила:
 - Пишите поведенчески и нормативно.
-- Используйте только данные из api_minimal_json (релевантный срез API).
+- Используйте данные из api_minimal_json (релевантный срез API)
 - Поля API встраивайте в сценарии (условия/действия). Отдельные реестры полей запрещены.
 - Если по требованиям нужно поле, которого нет в api_minimal_json — явно пометьте доработку API.
 - Соблюдайте нумерацию и формулировки из style_profile_json.
-- Если в style_profile_json задан формат дат (например, unix_to_iso) — укажите преобразования.
+- Поле "hints" из пользовательского JSON — служебный КОНТЕКСТ. Используйте его, чтобы точнее интерпретировать требования (термины, рамки, приоритеты, нюансы UX), выбирать корректные формулировки и акценты. 
+НЕ цитируйте hints, НЕ вставляйте его содержимое в результат и НЕ упоминайте слово "hints" в выходном тексте.
+- При конфликте: приоритет у requirements_json и api_minimal_json; hints лишь направляет стиль и детализацию.
 - Результат: чистый Markdown, без преамбул и пояснений.
+"""
+# Платформенно-нейтральные рекомендации без деталей конкретных кейсов
+    if platform == "native-mobile":
+        base += """
+Контекст платформы: нативное мобильное приложение (iOS/Android).
+- Используйте терминологию mobile-UX: «экран», «вид», «тап», «жест», «навбар», «табар».
+- Описывайте навигацию как переходы между экранами/вью, учитывая системные паттерны (модальные экраны, листы, шиты).
+- Акцент на краткость и одношаговые операции; учитывайте состояние сети/батареи/разрешения.
+"""
+    elif platform == "cross-mobile":
+        base += """
+Контекст платформы: кроссплатформенное мобильное приложение.
+- Терминология mobile-UX: «экран», «тап», «жест»; избегайте веб-метафор («страница», «клик») без необходимости.
+- Учитывайте единообразное поведение на iOS/Android, различия — только если продиктованы требованиями.
+"""
+    elif platform == "web":
+        base += """
+Контекст платформы: веб-приложение.
+- Используйте терминологию web-UX: «страница/вью», «клик», «ховер», «модальное окно», «таблица/грид».
+- Учитывайте адаптивность (desktop/tablet/mobile) и клавиатурную навигацию, доступность (ARIA).
 """
     return base + _few_shot_block(style_profile)
 
@@ -176,12 +210,15 @@ def user_prompt_universal(requirements_json: Dict[str, Any],
                           style_profile_json: Dict[str, Any],
                           section_plan: List[str],
                           feature_name: str,
-                          hints: Optional[Dict[str, Any]] = None) -> str:
+                          hints: Optional[Dict[str, Any]] = None,
+                        platform: Optional[str] = None) -> str:
+    platform_norm = _normalize_platform(platform)
     payload = {
         "meta": {
             "feature_name": feature_name,
             "generated_at": datetime.utcnow().isoformat() + "Z"
         },
+        "platform": platform_norm or None,
         "style_profile_json": style_profile_json,
         "requirements_json": requirements_json,
         "api_minimal_json": api_minimal_json,
@@ -196,8 +233,23 @@ def user_prompt_universal(requirements_json: Dict[str, Any],
             "Не раскрывать Request/Response как реестр полей — только сценарное описание.",
             "Указывать преобразования дат по style_profile_json.",
             "Ясно отмечать несоответствия между требованиями и API, без придумывания данных."
+            "Используйте данные из api_minimal_json: required — отражайте обязательность и валидации, enum — перечисляйте допустимые значения"
+            "Термины/сущности, отсутствующие во входных JSON — пометить как доработку."
+            "При наличии порционной загрузки (pagination/cursor/page/limit) фильтрация должна осуществляться с помощью отправки параметров API (не локально).",
+            "Если нужного фильтра нет в API — явно пометить «требуется доработка API для серверной фильтрации», вместо описания клиентской фильтрации."
         ]
     }
+        # Общие, платформенно-зависимые указания — без деталей конкретных кейсов
+    if platform_norm in {"native-mobile", "cross-mobile"}:
+        payload["strict_rules"].extend([
+            "Использовать терминологию мобильного UX (экраны, жесты, тап).",
+            "Описывать навигацию как переходы между экранами/состояниями, учитывая системные паттерны mobile."
+        ])
+    elif platform_norm == "web":
+        payload["strict_rules"].extend([
+            "Использовать терминологию веб-UX (клик, ховер, модальное окно, таблица/грид).",
+            "Учитывать адаптивность и доступность интерфейса."
+        ])
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -239,6 +291,7 @@ def main():
     parser.add_argument("--style-profile", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--hints", help="Путь к hints.json (опционально)")
+    parser.add_argument("--platform", choices=["native-mobile", "cross-mobile", "web"], help="Целевая платформа артефакта")
     parser.add_argument("--model", default=os.getenv("LLM_MODEL", "gpt-4o-mini"))
     parser.add_argument("--temperature", type=float, default=float(os.getenv("LLM_TEMPERATURE", "0.2")))
     parser.add_argument("--dry-run", action="store_true")
@@ -264,8 +317,8 @@ def main():
     if args.dry_run:
         md = dry_run_markdown(section_plan, feature_name)
     else:
-        sys_prompt = system_prompt_universal(style_profile)
-        usr_prompt = user_prompt_universal(requirements, api_minimal, style_profile, section_plan, feature_name, hints)
+        sys_prompt = sys_prompt = system_prompt_universal(style_profile, args.platform)
+        usr_prompt = user_prompt_universal(requirements, api_minimal, style_profile, section_plan, feature_name, hints, args.platform)
         try:
             md = call_llm_openai(sys_prompt, usr_prompt, args.model, args.temperature)
         except Exception as e:

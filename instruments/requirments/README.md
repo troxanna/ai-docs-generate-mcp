@@ -117,6 +117,7 @@ python scripts/screens_to_requirements.py ./screens --out "source/requirements.j
     --api-minimal source/minimal.json \
     --style-profile style/style_profile.json \
     --hints source/hints.json \
+    --platform "%native-mobile / cross-mobile / web%" \ 
     --out "%Название итогового артефакта%" \
     --model gpt-4o
 ```
