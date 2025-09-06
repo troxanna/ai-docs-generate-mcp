@@ -1,0 +1,6 @@
+{
+    "platform": "native-mobile",
+    "auth": { "jwt": true, "header": "Authorization", "scheme": "Bearer" },
+    "methods": 1,
+    "notes": "API используется в мобильном приложении, нужна вторая версия метода для получения списка транзакций, должна быть поддержка пагинации"
+  }

@@ -38,5 +38,8 @@ instruments/requirments/source/*
 instruments/requirments/source/hints.json
 instruments/requirments/screens/*
 instruments/venv
+!instruments/requirments/source/api_requirements.yaml
+!instruments/requirments/source/hints.yaml
+!instruments/requirments/source/api_ctx.json
 .DS_Store
 

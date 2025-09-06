@@ -121,6 +121,36 @@ python scripts/screens_to_requirements.py ./screens --out "source/requirements.j
     --out "%Название итогового артефакта%" \
     --model gpt-4o
 ```
+
+### `gen_openapi.py`  
+- Добавление методов в OpenAPI.  
+- На вход передаются:  
+  - требования к проектированию OpenAPI (опционально),  
+  - спецификация OpenAPI, в которую необходимо добавить новый метод,  
+  - контекст (краткая информация о назначении метода, ограничения, справочные данные),  
+  - скрины дизайна
+
+
+Перед тем как запускать **gen_openapi.py**, рекомендуется выполнить следующие действия:
+
+1. **Файл `api_ctx.json`**  
+   - Передать дополнительный контекст (назначение метода, ограничения) 
+
+2. **Файл `api_requirements.yaml`**  
+   - Передать требования к проектированию API (можно использовать стандарт из конфы).  
+
+**Пример запуска:**
+```bash
+  python scripts/gen_openapi.py \
+      --in-openapi spec/спека.yaml \
+      --out ./api.yaml \
+      --model gpt-4o-mini \
+      --context ./source/api_ctx.json \
+      --design-dir ./screens \
+      --gen-stoplight auto \
+      --conflict-policy skip \
+      --in-place
+```
 ---
 
 ## 3. Аналитическая работа
