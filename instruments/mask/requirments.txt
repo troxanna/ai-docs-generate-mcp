@@ -1,4 +1,0 @@
-pymupdf
-regex
-pyyaml
-deeppavlov
